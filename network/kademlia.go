@@ -571,6 +571,23 @@ func (k *Kademlia) callable(e *entry) bool {
 	return true
 }
 
+func (k *Kademlia) CloserPeerThanMe(addr []byte) bool {
+	var ret bool
+
+	myPo, _ := Pof(k.BaseAddr(), addr, 0)
+
+	// iterate connection in kademlia
+	k.EachConn(addr, 255, func(p *Peer, po int) bool {
+		if po > myPo {
+			ret = true
+		}
+
+		return false
+	})
+
+	return ret
+}
+
 // BaseAddr return the kademlia base address
 func (k *Kademlia) BaseAddr() []byte {
 	return k.base

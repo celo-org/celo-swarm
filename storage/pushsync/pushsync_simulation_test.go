@@ -56,18 +56,18 @@ var (
 // * downloader downloads the chunk
 // Trials are run concurrently
 func TestPushSyncSimulation(t *testing.T) {
-	nodeCnt := 4
+	nodeCnt := 16
 	chunkCnt := 500
-	trials := 10
-	err := testSyncerWithPubSub(t, nodeCnt, chunkCnt, trials, newServiceFunc)
+	testcases := 10
+	err := testSyncerWithPubSub(t, nodeCnt, chunkCnt, testcases, newServiceFunc)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
-func testSyncerWithPubSub(t *testing.T, nodeCnt, chunkCnt, trials int, sf simulation.ServiceFunc) error {
+func testSyncerWithPubSub(t *testing.T, nodeCnt, chunkCnt, testcases int, sf simulation.ServiceFunc) error {
 	t.Helper()
-	sim := simulation.New(map[string]simulation.ServiceFunc{
+	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"streamer": sf,
 	})
 	defer sim.Close()
@@ -79,11 +79,11 @@ func testSyncerWithPubSub(t *testing.T, nodeCnt, chunkCnt, trials int, sf simula
 		t.Fatal(err)
 	}
 	log.Info("Snapshot loaded")
-	time.Sleep(2 * time.Second)
+	time.Sleep(10 * time.Second)
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
-		time.Sleep(2 * time.Second)
+		time.Sleep(1 * time.Second)
 		errc := make(chan error)
-		for i := 0; i < trials; i++ {
+		for i := 0; i < testcases; i++ {
 			go uploadAndDownload(ctx, sim, errc, nodeCnt, chunkCnt, i)
 		}
 		i := 0
@@ -92,7 +92,7 @@ func testSyncerWithPubSub(t *testing.T, nodeCnt, chunkCnt, trials int, sf simula
 				return err
 			}
 			i++
-			if i >= trials {
+			if i >= testcases {
 				break
 			}
 		}

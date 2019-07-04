@@ -517,11 +517,13 @@ func (p *Pss) isSelfPossibleRecipient(msg *PssMsg, prox bool) bool {
 		return false
 	}
 
+	closerPeer := p.Kademlia.CloserPeerThanMe(msg.To)
+
 	depth := p.Kademlia.NeighbourhoodDepth()
 	po, _ := network.Pof(p.Kademlia.BaseAddr(), msg.To, 0)
 	log.Trace("selfpossible", "po", po, "depth", depth)
 
-	return depth <= po
+	return depth <= po && !closerPeer
 }
 
 /////////////////////////////////////////////////////////////////////
