@@ -78,8 +78,9 @@ func testSyncerWithPubSub(t *testing.T, nodeCnt, chunkCnt, testcases int, sf sim
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	log.Info("Snapshot loaded")
-	time.Sleep(10 * time.Second)
+	time.Sleep(5 * time.Second)
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 		time.Sleep(1 * time.Second)
 		errc := make(chan error)
@@ -203,7 +204,7 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 	bucket.Store(bucketKeyPushSyncer, p)
 
 	// setup storer
-	s := NewStorer(lstore, pubSub, p.PushReceipt)
+	s := NewStorer(netStore, pubSub, p.PushReceipt)
 
 	cleanup := func() {
 		p.Close()
