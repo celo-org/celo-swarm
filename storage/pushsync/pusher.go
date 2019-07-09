@@ -153,13 +153,6 @@ func (p *Pusher) sync() {
 		// handle incoming chunks
 		case ch, more := <-chunks:
 			func() {
-				// opentracing for pushsynced chunks
-				_, osp := spancontext.StartSpan(
-					context.TODO(),
-					"incoming.chunk")
-				defer osp.Finish()
-				osp.LogFields(olog.String("ref", ch.Address().String()))
-				osp.SetTag("addr", ch.Address().String())
 
 				chunksInBatch++
 				// if no more, set to nil and wait for timer
@@ -167,6 +160,14 @@ func (p *Pusher) sync() {
 					chunks = nil
 					return
 				}
+
+				// opentracing for pushsynced chunks
+				_, osp := spancontext.StartSpan(
+					context.TODO(),
+					"incoming.chunk")
+				defer osp.Finish()
+				osp.LogFields(olog.String("ref", ch.Address().String()))
+				osp.SetTag("addr", ch.Address().String())
 
 				metrics.GetOrRegisterCounter("pusher.send-chunk", nil).Inc(1)
 				// if no need to sync this chunk then continue
