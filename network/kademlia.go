@@ -578,6 +578,10 @@ func (k *Kademlia) CloserPeerThanMe(addr []byte) bool {
 
 	// iterate connection in kademlia
 	k.EachConn(addr, 255, func(p *Peer, po int) bool {
+		if !p.BzzPeer.Peer.HasCap("pss") {
+			return true
+		}
+
 		if po > myPo {
 			ret = true
 		}
