@@ -51,7 +51,7 @@ type Pusher struct {
 }
 
 var (
-	retryInterval = 2 * time.Second // seconds to wait before retry sync
+	retryInterval = 30 * time.Second // seconds to wait before retry sync
 )
 
 // pushedItem captures the info needed for the pusher about a chunk during the
@@ -209,6 +209,12 @@ func (p *Pusher) sync() {
 					log.Debug("just synced... ignore", "addr", addr)
 					return
 				}
+
+				timediff := time.Now().Sub(item.sentAt)
+				log.Debug("time to sync", "dur", timediff)
+
+				metrics.GetOrRegisterResettingTimer("pusher.chunk.roundtrip", nil).Update(timediff)
+
 				metrics.GetOrRegisterCounter("pusher.receipts.synced", nil).Inc(1)
 				// collect synced addresses
 				synced = append(synced, addr)
