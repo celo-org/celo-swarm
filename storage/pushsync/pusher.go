@@ -25,7 +25,9 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
+	"github.com/ethersphere/swarm/spancontext"
 	"github.com/ethersphere/swarm/storage"
+	olog "github.com/opentracing/opentracing-go/log"
 )
 
 // DB interface implemented by localstore
@@ -149,50 +151,70 @@ func (p *Pusher) sync() {
 
 		// handle incoming chunks
 		case ch, more := <-chunks:
-			chunksInBatch++
-			// if no more, set to nil and wait for timer
-			if !more {
-				chunks = nil
-				continue
-			}
+			func() {
+				// opentracing for pushsynced chunks
+				_, osp := spancontext.StartSpan(
+					context.TODO(),
+					"incoming.chunk")
+				defer osp.Finish()
+				osp.LogFields(olog.String("ref", ch.Address().String()))
+				osp.SetTag("addr", ch.Address().String())
 
-			metrics.GetOrRegisterCounter("pusher.send-chunk", nil).Inc(1)
-			// if no need to sync this chunk then continue
-			if !p.needToSync(ch) {
-				continue
-			}
+				chunksInBatch++
+				// if no more, set to nil and wait for timer
+				if !more {
+					chunks = nil
+					return
+				}
 
-			metrics.GetOrRegisterCounter("pusher.send-chunk.send-to-sync", nil).Inc(1)
-			// send the chunk and ignore the error
-			if err := p.sendChunkMsg(ch); err != nil {
-				log.Error("error sending chunk", "addr", ch.Address(), "err", err)
-			}
+				metrics.GetOrRegisterCounter("pusher.send-chunk", nil).Inc(1)
+				// if no need to sync this chunk then continue
+				if !p.needToSync(ch) {
+					return
+				}
+
+				metrics.GetOrRegisterCounter("pusher.send-chunk.send-to-sync", nil).Inc(1)
+				// send the chunk and ignore the error
+				if err := p.sendChunkMsg(ch); err != nil {
+					log.Error("error sending chunk", "addr", ch.Address(), "err", err)
+				}
+			}()
 
 		// handle incoming receipts
 		case addr := <-p.receipts:
-			metrics.GetOrRegisterCounter("pusher.receipts.all", nil).Inc(1)
-			log.Debug("synced", "addr", addr)
-			// ignore if already received receipt
-			item, found := p.pushed[addr.Hex()]
-			if !found {
-				metrics.GetOrRegisterCounter("pusher.receipts.not-found", nil).Inc(1)
-				log.Debug("not wanted or already got... ignore", "addr", addr)
-				continue
-			}
-			if item.synced {
-				metrics.GetOrRegisterCounter("pusher.receipts.already-synced", nil).Inc(1)
-				log.Debug("just synced... ignore", "addr", addr)
-				continue
-			}
-			metrics.GetOrRegisterCounter("pusher.receipts.synced", nil).Inc(1)
-			// collect synced addresses
-			synced = append(synced, addr)
-			// set synced flag
-			item.synced = true
-			// increment synced count for the tag if exists
-			if item.tag != nil {
-				item.tag.Inc(chunk.StateSynced)
-			}
+			func() {
+				// opentracing for pushsynced chunks
+				_, osp := spancontext.StartSpan(
+					context.TODO(),
+					"incoming.receipt")
+				defer osp.Finish()
+				osp.LogFields(olog.String("ref", addr.String()))
+				osp.SetTag("addr", addr.String())
+
+				metrics.GetOrRegisterCounter("pusher.receipts.all", nil).Inc(1)
+				log.Debug("synced", "addr", addr)
+				// ignore if already received receipt
+				item, found := p.pushed[addr.Hex()]
+				if !found {
+					metrics.GetOrRegisterCounter("pusher.receipts.not-found", nil).Inc(1)
+					log.Debug("not wanted or already got... ignore", "addr", addr)
+					return
+				}
+				if item.synced {
+					metrics.GetOrRegisterCounter("pusher.receipts.already-synced", nil).Inc(1)
+					log.Debug("just synced... ignore", "addr", addr)
+					return
+				}
+				metrics.GetOrRegisterCounter("pusher.receipts.synced", nil).Inc(1)
+				// collect synced addresses
+				synced = append(synced, addr)
+				// set synced flag
+				item.synced = true
+				// increment synced count for the tag if exists
+				if item.tag != nil {
+					item.tag.Inc(chunk.StateSynced)
+				}
+			}()
 
 		case <-p.quit:
 			// if there was a subscription, cancel it

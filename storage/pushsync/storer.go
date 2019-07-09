@@ -26,7 +26,9 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
+	"github.com/ethersphere/swarm/spancontext"
 	"github.com/ethersphere/swarm/storage"
+	olog "github.com/opentracing/opentracing-go/log"
 )
 
 // Store is the storage interface to save chunks
@@ -75,6 +77,13 @@ func (s *Storer) handleChunkMsg(msg []byte) error {
 	if err != nil {
 		return err
 	}
+
+	_, osp := spancontext.StartSpan(
+		context.TODO(),
+		"handle.chunk.msg")
+	defer osp.Finish()
+	osp.LogFields(olog.String("ref", fmt.Sprintf("%x", chmsg.Addr)))
+	osp.SetTag("addr", fmt.Sprintf("%x", chmsg.Addr))
 	log.Debug("Handler", "chunk", label(chmsg.Addr), "origin", label(chmsg.Origin), "self", fmt.Sprintf("%x", s.ps.BaseAddr()))
 	return s.processChunkMsg(chmsg)
 }
@@ -102,6 +111,13 @@ func (s *Storer) processChunkMsg(chmsg *chunkMsg) error {
 func (s *Storer) sendReceiptMsg(chmsg *chunkMsg) error {
 	// if origin is self, use direct channel, no pubsub send needed
 	if bytes.Equal(chmsg.Origin, s.ps.BaseAddr()) {
+		_, osp := spancontext.StartSpan(
+			context.TODO(),
+			"send.receipt")
+		defer osp.Finish()
+		osp.LogFields(olog.String("ref", fmt.Sprintf("%x", chmsg.Addr)))
+		osp.SetTag("addr", fmt.Sprintf("%x", chmsg.Addr))
+
 		go s.pushReceipt(chmsg.Addr)
 		return nil
 	}
