@@ -531,6 +531,8 @@ func (p *Pss) isSelfPossibleRecipient(msg *PssMsg, prox bool) bool {
 /////////////////////////////////////////////////////////////////////
 
 func (p *Pss) enqueue(msg *PssMsg) error {
+	defer metrics.GetOrRegisterResettingTimer("pss.enqueue", nil).UpdateSince(time.Now())
+
 	select {
 	case p.outbox <- msg:
 		return nil
@@ -545,6 +547,8 @@ func (p *Pss) enqueue(msg *PssMsg) error {
 //
 // Will fail if raw messages are disallowed
 func (p *Pss) SendRaw(address PssAddress, topic Topic, msg []byte) error {
+	defer metrics.GetOrRegisterResettingTimer("pss.send.raw", nil).UpdateSince(time.Now())
+
 	if err := validateAddress(address); err != nil {
 		return err
 	}
@@ -800,7 +804,7 @@ func label(b []byte) string {
 
 // add a message to the cache
 func (p *Pss) addFwdCache(msg *PssMsg) error {
-	metrics.GetOrRegisterCounter("pss.addfwdcache", nil).Inc(1)
+	defer metrics.GetOrRegisterResettingTimer("pss.addfwdcache", nil).UpdateSince(time.Now())
 
 	var entry pssCacheEntry
 	var ok bool

@@ -176,9 +176,11 @@ func (p *Pusher) sync() {
 
 				metrics.GetOrRegisterCounter("pusher.send-chunk.send-to-sync", nil).Inc(1)
 				// send the chunk and ignore the error
-				if err := p.sendChunkMsg(ch); err != nil {
-					log.Error("error sending chunk", "addr", ch.Address(), "err", err)
-				}
+				go func(ch chunk.Chunk) {
+					if err := p.sendChunkMsg(ch); err != nil {
+						log.Error("error sending chunk", "addr", ch.Address(), "err", err)
+					}
+				}(ch)
 			}()
 
 		// handle incoming receipts
