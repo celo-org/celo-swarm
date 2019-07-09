@@ -39,10 +39,10 @@ type Store interface {
 
 // Storer is the object used by the push-sync server side protocol
 type Storer struct {
-	store       Store             // store to put chunks in, and retrieve them
-	ps          PubSub            // pubsub interface to receive chunks and send receipts
-	deregister  func()            // deregister the registered handler when Storer is closed
-	pushReceipt func(addr []byte) // to be called...
+	store       Store                            // store to put chunks in, and retrieve them
+	ps          PubSub                           // pubsub interface to receive chunks and send receipts
+	deregister  func()                           // deregister the registered handler when Storer is closed
+	pushReceipt func(addr []byte, origin []byte) // to be called...
 }
 
 // NewStorer constructs a Storer
@@ -52,7 +52,7 @@ type Storer struct {
 // - the chunks are stored and synced to their nearest neighbours and
 // - a statement of custody receipt is sent as a response to the originator
 // it sets a cancel function that deregisters the handler
-func NewStorer(store Store, ps PubSub, pushReceipt func(addr []byte)) *Storer {
+func NewStorer(store Store, ps PubSub, pushReceipt func(addr []byte, origin []byte)) *Storer {
 	s := &Storer{
 		store:       store,
 		ps:          ps,
@@ -109,21 +109,26 @@ func (s *Storer) processChunkMsg(chmsg *chunkMsg) error {
 // to the originator of a push-synced chunk message.
 // Including a unique nonce makes the receipt immune to deduplication cache
 func (s *Storer) sendReceiptMsg(chmsg *chunkMsg) error {
+	_, osp := spancontext.StartSpan(
+		context.TODO(),
+		"send.receipt")
+	defer osp.Finish()
+	osp.LogFields(olog.String("ref", fmt.Sprintf("%x", chmsg.Addr)))
+	osp.SetTag("addr", fmt.Sprintf("%x", chmsg.Addr))
+
 	// if origin is self, use direct channel, no pubsub send needed
 	if bytes.Equal(chmsg.Origin, s.ps.BaseAddr()) {
-		_, osp := spancontext.StartSpan(
-			context.TODO(),
-			"send.receipt")
-		defer osp.Finish()
-		osp.LogFields(olog.String("ref", fmt.Sprintf("%x", chmsg.Addr)))
-		osp.SetTag("addr", fmt.Sprintf("%x", chmsg.Addr))
+		osp.LogFields(olog.String("origin", "self"))
 
-		go s.pushReceipt(chmsg.Addr)
+		go s.pushReceipt(chmsg.Addr, chmsg.Origin)
 		return nil
 	}
+	osp.LogFields(olog.String("origin", fmt.Sprintf("%x", chmsg.Origin)))
+
 	rmsg := &receiptMsg{
-		Addr:  chmsg.Addr,
-		Nonce: newNonce(),
+		Addr:   chmsg.Addr,
+		Origin: s.ps.BaseAddr(), // receipt origin is who is sending back the receipt
+		Nonce:  newNonce(),
 	}
 	msg, err := rlp.EncodeToBytes(rmsg)
 	if err != nil {

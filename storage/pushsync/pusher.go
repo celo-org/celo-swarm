@@ -18,6 +18,7 @@ package pushsync
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
@@ -45,7 +46,7 @@ type Pusher struct {
 	tags     *chunk.Tags            // tags to update counts
 	quit     chan struct{}          // channel to signal quitting on all loops
 	pushed   map[string]*pushedItem // cache of items push-synced
-	receipts chan chunk.Address     // channel to receive receipts
+	receipts chan *receiptMsg       // channel to receive receipts
 	ps       PubSub                 // PubSub interface to send chunks and receive receipts
 }
 
@@ -72,7 +73,7 @@ func NewPusher(store DB, ps PubSub, tags *chunk.Tags) *Pusher {
 		tags:     tags,
 		quit:     make(chan struct{}),
 		pushed:   make(map[string]*pushedItem),
-		receipts: make(chan chunk.Address),
+		receipts: make(chan *receiptMsg),
 		ps:       ps,
 	}
 	go p.sync()
@@ -181,7 +182,9 @@ func (p *Pusher) sync() {
 			}()
 
 		// handle incoming receipts
-		case addr := <-p.receipts:
+		case rec := <-p.receipts:
+			addr := chunk.Address(rec.Addr)
+			origin := rec.Origin
 			func() {
 				// opentracing for pushsynced chunks
 				_, osp := spancontext.StartSpan(
@@ -189,6 +192,7 @@ func (p *Pusher) sync() {
 					"incoming.receipt")
 				defer osp.Finish()
 				osp.LogFields(olog.String("ref", addr.String()))
+				osp.LogFields(olog.String("origin", fmt.Sprintf("%x", origin)))
 				osp.SetTag("addr", addr.String())
 
 				metrics.GetOrRegisterCounter("pusher.receipts.all", nil).Inc(1)
@@ -235,15 +239,20 @@ func (p *Pusher) handleReceiptMsg(msg []byte) error {
 		return err
 	}
 	log.Debug("Handler", "receipt", label(receipt.Addr), "self", label(p.ps.BaseAddr()))
-	p.PushReceipt(receipt.Addr)
+	p.PushReceipt(receipt.Addr, receipt.Origin)
 	return nil
 }
 
 // pushReceipt just inserts the address into the channel
 // it is also called by the push sync Storer if the originator and storer identical
-func (p *Pusher) PushReceipt(addr []byte) {
+func (p *Pusher) PushReceipt(addr []byte, origin []byte) {
+	r := &receiptMsg{
+		addr,
+		origin,
+		[]byte{},
+	}
 	select {
-	case p.receipts <- addr:
+	case p.receipts <- r:
 	case <-p.quit:
 	}
 }
