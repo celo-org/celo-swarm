@@ -51,7 +51,7 @@ type Pusher struct {
 }
 
 var (
-	retryInterval = 30 * time.Second // seconds to wait before retry sync
+	retryInterval = 60 * time.Second // seconds to wait before retry sync
 )
 
 // pushedItem captures the info needed for the pusher about a chunk during the
@@ -266,6 +266,8 @@ func (p *Pusher) PushReceipt(addr []byte, origin []byte) {
 // sendChunkMsg sends chunks to their destination
 // using the PubSub interface Send method (e.g., pss neighbourhood addressing)
 func (p *Pusher) sendChunkMsg(ch chunk.Chunk) error {
+	defer metrics.GetOrRegisterResettingTimer("pusher.send.chunk", nil).UpdateSince(time.Now())
+
 	cmsg := &chunkMsg{
 		Origin: p.ps.BaseAddr(),
 		Addr:   ch.Address()[:],
