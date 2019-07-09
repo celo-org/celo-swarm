@@ -107,7 +107,7 @@ func (n *NetStore) Put(ctx context.Context, mode chunk.ModePut, ch Chunk) (bool,
 	n.putMu.Lock()
 	defer n.putMu.Unlock()
 
-	log.Trace("netstore.put", "ref", ch.Address().String(), "mode", mode)
+	log.Trace("netstore.put", "ref", ch.Address().String(), "mode", mode, "node", n.localID.String())
 
 	// put the chunk to the localstore, there should be no error
 	exists, err := n.Store.Put(ctx, mode, ch)
@@ -151,7 +151,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (C
 
 	ref := req.Addr
 
-	log.Trace("netstore.get", "ref", ref.String())
+	log.Trace("netstore.get", "ref", ref.String(), "node", n.localID.String())
 
 	ch, err := n.Store.Get(ctx, mode, ref)
 	if err != nil {
@@ -160,7 +160,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (C
 			log.Error("localstore get error", "err", err)
 		}
 
-		log.Trace("netstore.chunk-not-in-localstore", "ref", ref.String())
+		log.Trace("netstore.chunk-not-in-localstore", "ref", ref.String(), "node", n.localID.String())
 
 		v, err, _ := n.requestGroup.Do(ref.String(), func() (interface{}, error) {
 			// currently we issue a retrieve request if a fetcher
@@ -198,7 +198,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (C
 
 		c := v.(Chunk)
 
-		log.Trace("netstore.singleflight returned", "ref", ref.String(), "err", err)
+		log.Trace("netstore.singleflight returned", "ref", ref.String(), "node", n.localID.String(), "err", err)
 
 		return c, nil
 	}
