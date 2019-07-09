@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/chunk"
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/shed"
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -125,6 +126,7 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item) (exists bool, err error) {
 		if !exists {
 			item.StoreTimestamp = now()
 			item.BinID, err = db.binIDs.IncInBatch(batch, uint64(db.po(item.Address)))
+			log.Debug("chunk.modeputupload", "ref", fmt.Sprintf("%x", item.Address), "binid", item.BinID, "err", err)
 			if err != nil {
 				return false, err
 			}
