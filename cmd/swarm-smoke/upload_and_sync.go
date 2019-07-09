@@ -35,6 +35,7 @@ import (
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/testutil"
+	"github.com/pborman/uuid"
 
 	cli "gopkg.in/urfave/cli.v1"
 )
@@ -284,7 +285,8 @@ func uploadAndSync(c *cli.Context, randomBytes []byte) error {
 	log.Info("uploading to "+httpEndpoint(hosts[0])+" and syncing", "seed", seed)
 
 	t1 := time.Now()
-	hash, err := upload(randomBytes, httpEndpoint(hosts[0]))
+	tag := uuid.New()[:8]
+	hash, err := uploadWithTag(randomBytes, httpEndpoint(hosts[0]), tag)
 	if err != nil {
 		log.Error(err.Error())
 		return err
@@ -299,6 +301,11 @@ func uploadAndSync(c *cli.Context, randomBytes []byte) error {
 	}
 
 	log.Info("uploaded successfully", "hash", hash, "took", t2, "digest", fmt.Sprintf("%x", fhash))
+
+	// wait to push sync sync
+	if pushsyncDelay {
+		waitToPushSynced(tag)
+	}
 
 	// wait to sync and log chunks before fetch attempt, only if syncDelay is set to true
 	if syncDelay {
@@ -338,6 +345,29 @@ func uploadAndSync(c *cli.Context, randomBytes []byte) error {
 	return nil
 }
 
+func isPushSynced(wsHost string, tagname string) (bool, error) {
+	rpcClient, err := rpc.Dial(wsHost)
+	if rpcClient != nil {
+		defer rpcClient.Close()
+	}
+
+	if err != nil {
+		log.Error("error dialing host", "err", err)
+		return false, err
+	}
+
+	var isSynced bool
+	err = rpcClient.Call(&isSynced, "bzz_isPushSynced", tagname)
+	if err != nil {
+		log.Error("error calling host for isPushSynced", "err", err)
+		return false, err
+	}
+
+	log.Debug("isSynced result", "host", wsHost, "isSynced", isSynced)
+
+	return isSynced, nil
+}
+
 func isSyncing(wsHost string) (bool, error) {
 	rpcClient, err := rpc.Dial(wsHost)
 	if rpcClient != nil {
@@ -359,6 +389,21 @@ func isSyncing(wsHost string) (bool, error) {
 	log.Debug("isSyncing result", "host", wsHost, "isSyncing", isSyncing)
 
 	return isSyncing, nil
+}
+
+func waitToPushSynced(tagname string) {
+	for {
+		synced, err := isPushSynced(wsEndpoint(hosts[0]), tagname)
+		if err != nil {
+			log.Error(err.Error())
+		}
+
+		if synced {
+			return
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	return
 }
 
 func waitToSync() {

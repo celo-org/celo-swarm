@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/storage"
@@ -49,6 +50,25 @@ func (inspector *Inspector) ListKnown() []string {
 		res = append(res, fmt.Sprintf("%v", v))
 	}
 	return res
+}
+
+func (inspector *Inspector) IsPushSynced(tagname string) bool {
+	log.Info("is push synced", "tagname", tagname)
+	tags := inspector.api.Tags.All()
+
+	for _, t := range tags {
+		if t.Name == tagname {
+			n, total, err := t.Status(chunk.StateSynced)
+
+			log.Debug("found tag", "tagname", tagname, "n", n, "total", total, "err", err)
+
+			if err == nil && n == total {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func (inspector *Inspector) IsSyncing() bool {
