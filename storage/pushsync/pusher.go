@@ -266,7 +266,7 @@ func (p *Pusher) PushReceipt(addr []byte, origin []byte) {
 // sendChunkMsg sends chunks to their destination
 // using the PubSub interface Send method (e.g., pss neighbourhood addressing)
 func (p *Pusher) sendChunkMsg(ch chunk.Chunk) error {
-	defer metrics.GetOrRegisterResettingTimer("pusher.send.chunk", nil).UpdateSince(time.Now())
+	rlpTimer := time.Now()
 
 	cmsg := &chunkMsg{
 		Origin: p.ps.BaseAddr(),
@@ -279,6 +279,10 @@ func (p *Pusher) sendChunkMsg(ch chunk.Chunk) error {
 		return err
 	}
 	log.Debug("send chunk", "addr", label(ch.Address()), "self", label(p.ps.BaseAddr()))
+
+	metrics.GetOrRegisterResettingTimer("pusher.send.chunk.rlp", nil).UpdateSince(rlpTimer)
+
+	defer metrics.GetOrRegisterResettingTimer("pusher.send.chunk.pss", nil).UpdateSince(time.Now())
 	return p.ps.Send(ch.Address()[:], pssChunkTopic, msg)
 }
 
