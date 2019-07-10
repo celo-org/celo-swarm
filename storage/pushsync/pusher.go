@@ -52,7 +52,7 @@ type Pusher struct {
 }
 
 var (
-	retryInterval = 60 * time.Second // seconds to wait before retry sync
+	retryInterval = 30 * time.Second // seconds to wait before retry sync
 )
 
 // pushedItem captures the info needed for the pusher about a chunk during the
