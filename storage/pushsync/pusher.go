@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
+	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/spancontext"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/opentracing/opentracing-go"
@@ -43,6 +44,7 @@ type DB interface {
 
 // Pusher takes care of the push syncing
 type Pusher struct {
+	kad      *network.Kademlia
 	store    DB                     // localstore DB
 	tags     *chunk.Tags            // tags to update counts
 	quit     chan struct{}          // channel to signal quitting on all loops
@@ -71,8 +73,9 @@ type pushedItem struct {
 // - a DB interface to subscribe to push sync index to allow iterating over recently stored chunks
 // - a pubsub interface to send chunks and receive statements of custody
 // - tags that hold the several tag
-func NewPusher(store DB, ps PubSub, tags *chunk.Tags) *Pusher {
+func NewPusher(store DB, ps PubSub, tags *chunk.Tags, kad *network.Kademlia) *Pusher {
 	p := &Pusher{
+		kad:      kad,
 		store:    store,
 		tags:     tags,
 		quit:     make(chan struct{}),
@@ -157,7 +160,6 @@ func (p *Pusher) sync() {
 		// handle incoming chunks
 		case ch, more := <-chunks:
 			func() {
-
 				chunksInBatch++
 				// if no more, set to nil and wait for timer
 				if !more {
@@ -301,11 +303,41 @@ func (p *Pusher) needToSync(ch chunk.Chunk) bool {
 		}
 		// first time encountered
 	} else {
+
+		addr := ch.Address()
+
 		// remember item
 		tag, _ := p.tags.Get(ch.TagID())
 		item = &pushedItem{
 			tag: tag,
 		}
+
+		// should i sync??
+		if !p.kad.CloserPeerThanMe(addr) {
+			// no =>
+
+			// mark as synced
+			// set chunk status to synced, insert to db GC index
+			if err := p.store.Set(context.Background(), chunk.ModeSetSync, addr); err != nil {
+				log.Warn("error setting chunk to synced", "addr", addr, "err", err)
+			}
+
+			// set synced flag
+			item.synced = true
+			// increment synced count for the tag if exists
+			if item.tag != nil {
+				item.tag.Inc(chunk.StateSynced)
+
+				if item.tag.DoneSyncing() {
+					log.Info("closing root span for tag", "taguid", item.tag.Uid, "tagname", item.tag.Name)
+					item.tag.FinishRootSpan()
+				}
+			}
+
+			return false
+		}
+		// i should sync
+
 		// increment SENT count on tag  if it exists
 		if tag != nil {
 			tag.Inc(chunk.StateSent)
