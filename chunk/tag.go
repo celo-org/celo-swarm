@@ -17,6 +17,7 @@
 package chunk
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"sync/atomic"
@@ -43,16 +44,17 @@ const (
 
 // Tag represents info on the status of new chunks
 type Tag struct {
-	Uid       uint32    // a unique identifier for this tag
-	Name      string    // a name tag for this tag
-	Address   Address   // the associated swarm hash for this tag
-	total     int64     // total chunks belonging to a tag
-	split     int64     // number of chunks already processed by splitter for hashing
-	seen      int64     // number of chunks already seen
-	stored    int64     // number of chunks already stored locally
-	sent      int64     // number of chunks sent for push syncing
-	synced    int64     // number of chunks synced with proof
-	startedAt time.Time // tag started to calculate ETA
+	Uid       uint32          // a unique identifier for this tag
+	Name      string          // a name tag for this tag
+	Address   Address         // the associated swarm hash for this tag
+	total     int64           // total chunks belonging to a tag
+	split     int64           // number of chunks already processed by splitter for hashing
+	seen      int64           // number of chunks already seen
+	stored    int64           // number of chunks already stored locally
+	sent      int64           // number of chunks sent for push syncing
+	synced    int64           // number of chunks synced with proof
+	startedAt time.Time       // tag started to calculate ETA
+	tctx      context.Context // tracing context
 }
 
 // New creates a new tag, stores it by the name and returns it
@@ -63,6 +65,7 @@ func NewTag(uid uint32, s string, total int64) *Tag {
 		Name:      s,
 		startedAt: time.Now(),
 		total:     total,
+		tctx:      context.Background(), // tracing context
 	}
 	return t
 }

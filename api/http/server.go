@@ -42,7 +42,6 @@ import (
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/sctx"
-	"github.com/ethersphere/swarm/spancontext"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/feed"
 	"github.com/opentracing/opentracing-go"
@@ -303,14 +302,15 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 	log.Debug("handle.post.files", "ruid", ruid)
 	postFilesCount.Inc(1)
 
-	ctx, sp := spancontext.StartSpan(r.Context(), "handle.post.files")
-	defer sp.Finish()
+	ctx := r.Context()
+	//ctx, sp := spancontext.StartSpan(r.Context(), "handle.post.files")
+	//defer sp.Finish()
 
-	quitChan := make(chan struct{})
-	defer close(quitChan)
+	//quitChan := make(chan struct{})
+	//defer close(quitChan)
 
 	// periodically  monitor the tag for this upload and log its state to the `handle.post.files` span
-	go periodicTagTrace(s.api.Tags, sctx.GetTag(ctx), quitChan, sp)
+	//go periodicTagTrace(s.api.Tags, sctx.GetTag(ctx), quitChan, sp)
 
 	contentType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil {

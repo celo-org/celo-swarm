@@ -244,7 +244,7 @@ func (s *StreamerAndPss) Stop() error {
 }
 
 func upload(ctx context.Context, store Store, tags *chunk.Tags, tagname string, n int) (tag *chunk.Tag, addrs []storage.Address, err error) {
-	tag, err = tags.New(tagname, int64(n))
+	tag, err = tags.Create(tagname, int64(n))
 	if err != nil {
 		return nil, nil, err
 	}
