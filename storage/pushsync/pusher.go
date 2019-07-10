@@ -28,6 +28,7 @@ import (
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/spancontext"
 	"github.com/ethersphere/swarm/storage"
+	"github.com/opentracing/opentracing-go"
 	olog "github.com/opentracing/opentracing-go/log"
 )
 
@@ -60,6 +61,9 @@ type pushedItem struct {
 	tag    *chunk.Tag // tag for the chunk
 	sentAt time.Time  // most recently sent at time
 	synced bool       // set when chunk got synced
+
+	// roundtrip span
+	sp opentracing.Span
 }
 
 // NewPusher contructs a Pusher and starts up the push sync protocol
@@ -161,14 +165,6 @@ func (p *Pusher) sync() {
 					return
 				}
 
-				// opentracing for pushsynced chunks
-				_, osp := spancontext.StartSpan(
-					context.TODO(),
-					"incoming.chunk")
-				defer osp.Finish()
-				osp.LogFields(olog.String("ref", ch.Address().String()))
-				osp.SetTag("addr", ch.Address().String())
-
 				metrics.GetOrRegisterCounter("pusher.send-chunk", nil).Inc(1)
 				// if no need to sync this chunk then continue
 				if !p.needToSync(ch) {
@@ -189,15 +185,6 @@ func (p *Pusher) sync() {
 			addr := chunk.Address(rec.Addr)
 			origin := rec.Origin
 			func() {
-				// opentracing for pushsynced chunks
-				_, osp := spancontext.StartSpan(
-					context.TODO(),
-					"incoming.receipt")
-				defer osp.Finish()
-				osp.LogFields(olog.String("ref", addr.String()))
-				osp.LogFields(olog.String("origin", fmt.Sprintf("%x", origin)))
-				osp.SetTag("addr", addr.String())
-
 				metrics.GetOrRegisterCounter("pusher.receipts.all", nil).Inc(1)
 				log.Debug("synced", "addr", addr)
 				// ignore if already received receipt
@@ -226,6 +213,14 @@ func (p *Pusher) sync() {
 				// increment synced count for the tag if exists
 				if item.tag != nil {
 					item.tag.Inc(chunk.StateSynced)
+
+					item.sp.LogFields(olog.String("ro", fmt.Sprintf("%x", origin)))
+					item.sp.Finish()
+
+					if item.tag.DoneSyncing() {
+						log.Info("closing root span for tag", "taguid", item.tag.Uid, "tagname", item.tag.Name)
+						item.tag.FinishRootSpan()
+					}
 				}
 			}()
 
@@ -312,9 +307,19 @@ func (p *Pusher) needToSync(ch chunk.Chunk) bool {
 			tag: tag,
 		}
 		// increment SENT count on tag  if it exists
-		if item.tag != nil {
-			item.tag.Inc(chunk.StateSent)
+		if tag != nil {
+			tag.Inc(chunk.StateSent)
+
+			// opentracing for chunk roundtrip
+			_, osp := spancontext.StartSpan(
+				tag.Tctx,
+				"handle.chunk.pushsync")
+			osp.LogFields(olog.String("ref", ch.Address().String()))
+			osp.SetTag("addr", ch.Address().String())
+
+			item.sp = osp
 		}
+
 		// remember the item
 		p.pushed[ch.Address().Hex()] = item
 	}

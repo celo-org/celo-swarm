@@ -22,6 +22,9 @@ import (
 	"errors"
 	"sync/atomic"
 	"time"
+
+	"github.com/ethersphere/swarm/spancontext"
+	"github.com/opentracing/opentracing-go"
 )
 
 var (
@@ -44,17 +47,20 @@ const (
 
 // Tag represents info on the status of new chunks
 type Tag struct {
-	Uid       uint32          // a unique identifier for this tag
-	Name      string          // a name tag for this tag
-	Address   Address         // the associated swarm hash for this tag
-	total     int64           // total chunks belonging to a tag
-	split     int64           // number of chunks already processed by splitter for hashing
-	seen      int64           // number of chunks already seen
-	stored    int64           // number of chunks already stored locally
-	sent      int64           // number of chunks sent for push syncing
-	synced    int64           // number of chunks synced with proof
-	startedAt time.Time       // tag started to calculate ETA
-	tctx      context.Context // tracing context
+	Uid       uint32    // a unique identifier for this tag
+	Name      string    // a name tag for this tag
+	Address   Address   // the associated swarm hash for this tag
+	total     int64     // total chunks belonging to a tag
+	split     int64     // number of chunks already processed by splitter for hashing
+	seen      int64     // number of chunks already seen
+	stored    int64     // number of chunks already stored locally
+	sent      int64     // number of chunks sent for push syncing
+	synced    int64     // number of chunks synced with proof
+	startedAt time.Time // tag started to calculate ETA
+
+	// end-to-end tag tracing
+	Tctx context.Context  // tracing context
+	Sp   opentracing.Span // tracing root span TODO: should it be exported?
 }
 
 // New creates a new tag, stores it by the name and returns it
@@ -65,9 +71,14 @@ func NewTag(uid uint32, s string, total int64) *Tag {
 		Name:      s,
 		startedAt: time.Now(),
 		total:     total,
-		tctx:      context.Background(), // tracing context
 	}
+
+	t.Tctx, t.Sp = spancontext.StartSpan(context.Background(), "new.upload.tag")
 	return t
+}
+
+func (t *Tag) FinishRootSpan() {
+	t.Sp.Finish()
 }
 
 // Inc increments the count for a state
@@ -109,6 +120,10 @@ func (t *Tag) Get(state State) int64 {
 // GetTotal returns the total count
 func (t *Tag) Total() int64 {
 	return atomic.LoadInt64(&t.total)
+}
+
+func (t *Tag) DoneSyncing() bool {
+	return atomic.LoadInt64(&t.total) == atomic.LoadInt64(&t.synced)
 }
 
 // DoneSplit sets total count to SPLIT count and sets the associated swarm hash for this tag

@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/ethersphere/swarm/sctx"
+	"github.com/ethersphere/swarm/spancontext"
 )
 
 // Tags hold tag information indexed by a unique random uint32
@@ -48,11 +49,12 @@ func (ts *Tags) Create(s string, total int64) (*Tag, error) {
 		Name:      s,
 		startedAt: time.Now(),
 		total:     total,
-		tctx:      context.Background(), // tracing context
 	}
 	if _, loaded := ts.tags.LoadOrStore(t.Uid, t); loaded {
 		return nil, errExists
 	}
+
+	t.Tctx, t.Sp = spancontext.StartSpan(context.Background(), "new.upload.tag")
 	return t, nil
 }
 

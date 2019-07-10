@@ -42,10 +42,9 @@ import (
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/sctx"
+	"github.com/ethersphere/swarm/spancontext"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/feed"
-	"github.com/opentracing/opentracing-go"
-	olog "github.com/opentracing/opentracing-go/log"
 	"github.com/rs/cors"
 )
 
@@ -302,15 +301,16 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 	log.Debug("handle.post.files", "ruid", ruid)
 	postFilesCount.Inc(1)
 
+	tagUid := sctx.GetTag(r.Context())
+	tag, err := s.api.Tags.Get(tagUid)
+	if err != nil {
+		log.Error("handle post raw got an error retrieving tag", "tagUid", tagUid, "err", err)
+	}
+
 	ctx := r.Context()
-	//ctx, sp := spancontext.StartSpan(r.Context(), "handle.post.files")
-	//defer sp.Finish()
 
-	//quitChan := make(chan struct{})
-	//defer close(quitChan)
-
-	// periodically  monitor the tag for this upload and log its state to the `handle.post.files` span
-	//go periodicTagTrace(s.api.Tags, sctx.GetTag(ctx), quitChan, sp)
+	_, sp := spancontext.StartSpan(tag.Tctx, "http.post")
+	defer sp.Finish()
 
 	contentType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil {
@@ -363,12 +363,6 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 		postFilesFail.Inc(1)
 		respondError(w, r, fmt.Sprintf("cannot create manifest: %s", err), http.StatusInternalServerError)
 		return
-	}
-
-	tagUid := sctx.GetTag(r.Context())
-	tag, err := s.api.Tags.Get(tagUid)
-	if err != nil {
-		log.Error("got an error retrieving tag for DoneSplit", "tagUid", tagUid, "err", err)
 	}
 
 	log.Debug("done splitting, setting tag total", "SPLIT", tag.Get(chunk.StateSplit), "TOTAL", tag.Total())
@@ -946,29 +940,4 @@ func (lrw *loggingResponseWriter) WriteHeader(code int) {
 
 func isDecryptError(err error) bool {
 	return strings.Contains(err.Error(), api.ErrDecrypt.Error())
-}
-
-// periodicTagTrace queries the tag every 2 seconds and logs its state to the span
-func periodicTagTrace(tags *chunk.Tags, tagUid uint32, q chan struct{}, sp opentracing.Span) {
-	f := func() {
-		tag, err := tags.Get(tagUid)
-		if err != nil {
-			log.Error("error while getting tag", "tagUid", tagUid, "err", err)
-		}
-
-		sp.LogFields(olog.String("tag state", fmt.Sprintf("split=%d stored=%d seen=%d synced=%d", tag.Get(chunk.StateSplit), tag.Get(chunk.StateStored), tag.Get(chunk.StateSeen), tag.Get(chunk.StateSynced))))
-	}
-
-	for {
-		select {
-		case <-q:
-			f()
-
-			return
-		default:
-			f()
-
-			time.Sleep(2 * time.Second)
-		}
-	}
 }
