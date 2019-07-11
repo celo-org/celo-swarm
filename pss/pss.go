@@ -111,6 +111,12 @@ func (params *PssParams) WithPrivateKey(privatekey *ecdsa.PrivateKey) *PssParams
 // Toplevel pss object, takes care of message sending, receiving, decryption and encryption, message handler dispatchers and message forwarding.
 //
 // Implements node.Service
+
+type OutboxMsg struct {
+	msg       *PssMsg
+	startedAt time.Time
+}
+
 type Pss struct {
 	*network.Kademlia // we can get the Kademlia address from this
 	*KeyStore
@@ -127,7 +133,7 @@ type Pss struct {
 	msgTTL          time.Duration
 	paddingByteSize int
 	capstring       string
-	outbox          chan *PssMsg
+	outbox          chan *OutboxMsg
 
 	// message handling
 	handlers           map[Topic]map[*handler]bool // topic and version based pss payload handlers. See pss.Handle()
@@ -169,7 +175,7 @@ func NewPss(k *network.Kademlia, params *PssParams) (*Pss, error) {
 		msgTTL:          params.MsgTTL,
 		paddingByteSize: defaultPaddingByteSize,
 		capstring:       cap.String(),
-		outbox:          make(chan *PssMsg, defaultOutboxCapacity),
+		outbox:          make(chan *OutboxMsg, defaultOutboxCapacity),
 
 		handlers:         make(map[Topic]map[*handler]bool),
 		topicHandlerCaps: make(map[Topic]*handlerCaps),
@@ -214,11 +220,17 @@ func (p *Pss) Start(srv *p2p.Server) error {
 		for {
 			select {
 			case msg := <-p.outbox:
-				err := p.forward(msg)
+				metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(len(p.outbox)))
+
+				//go func(msg *PssMsg) {
+				err := p.forward(msg.msg)
 				if err != nil {
 					log.Error(err.Error())
 					metrics.GetOrRegisterCounter("pss.forward.err", nil).Inc(1)
 				}
+				metrics.GetOrRegisterResettingTimer("pss.handle.outbox", nil).UpdateSince(msg.startedAt)
+
+				//}(msg)
 			case <-p.quitC:
 				return
 			}
@@ -533,8 +545,14 @@ func (p *Pss) isSelfPossibleRecipient(msg *PssMsg, prox bool) bool {
 func (p *Pss) enqueue(msg *PssMsg) error {
 	defer metrics.GetOrRegisterResettingTimer("pss.enqueue", nil).UpdateSince(time.Now())
 
+	outboxmsg := &OutboxMsg{
+		msg:       msg,
+		startedAt: time.Now(),
+	}
 	select {
-	case p.outbox <- msg:
+	case p.outbox <- outboxmsg:
+		metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(len(p.outbox)))
+
 		return nil
 	default:
 	}
