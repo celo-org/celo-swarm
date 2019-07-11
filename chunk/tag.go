@@ -23,7 +23,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/spancontext"
 	"github.com/opentracing/opentracing-go"
 )
@@ -124,19 +123,13 @@ func (t *Tag) Total() int64 {
 }
 
 func (t *Tag) DoneSyncing() bool {
-	total := atomic.LoadInt64(&t.total)
-	synced := atomic.LoadInt64(&t.synced)
-	seen := atomic.LoadInt64(&t.seen)
+	n, total, err := t.Status(StateSynced)
 
-	if synced%10 == 0 || synced+10 >= total {
-		log.Info("still syncing", "total", total, "synced", synced, "seen", seen, "name", t.Name, "uid", t.Uid)
+	if err == nil && n == total {
+		return true
 	}
 
-	if total == synced+seen {
-		log.Info("done syncing", "total", total, "synced", synced, "seen", seen, "name", t.Name, "uid", t.Uid)
-	}
-
-	return total == synced+seen
+	return false
 }
 
 // DoneSplit sets total count to SPLIT count and sets the associated swarm hash for this tag

@@ -328,6 +328,14 @@ func (p *Pusher) needToSync(ch chunk.Chunk) bool {
 			if item.tag != nil {
 				item.tag.Inc(chunk.StateSynced)
 
+				// opentracing for self chunks that don't need syncing?
+				_, osp := spancontext.StartSpan(
+					tag.Tctx,
+					"chunk.mine")
+				osp.LogFields(olog.String("ref", ch.Address().String()))
+				osp.SetTag("addr", ch.Address().String())
+				osp.Finish()
+
 				if item.tag.DoneSyncing() {
 					log.Info("closing root span for tag", "taguid", item.tag.Uid, "tagname", item.tag.Name)
 					item.tag.FinishRootSpan()
@@ -345,7 +353,7 @@ func (p *Pusher) needToSync(ch chunk.Chunk) bool {
 			// opentracing for chunk roundtrip
 			_, osp := spancontext.StartSpan(
 				tag.Tctx,
-				"handle.chunk.pushsync")
+				"chunk.sent")
 			osp.LogFields(olog.String("ref", ch.Address().String()))
 			osp.SetTag("addr", ch.Address().String())
 

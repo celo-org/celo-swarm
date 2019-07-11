@@ -139,11 +139,7 @@ func uploadAndDownload(ctx context.Context, sim *simulation.Simulation, errc cha
 	}
 
 	// wait till synced
-	for {
-		n, total, err := tag.Status(chunk.StateSynced)
-		if err == nil && n == total {
-			break
-		}
+	for !tag.DoneSyncing() {
 		time.Sleep(100 * time.Millisecond)
 	}
 

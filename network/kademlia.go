@@ -72,7 +72,7 @@ func NewKadParams() *KadParams {
 	return &KadParams{
 		MaxProxDisplay:    16,
 		NeighbourhoodSize: 2,
-		MinBinSize:        3,
+		MinBinSize:        2,
 		MaxBinSize:        4,
 		RetryInterval:     4200000000, // 4.2 sec
 		MaxRetries:        42,
