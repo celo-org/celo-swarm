@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
+	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/spancontext"
 	"github.com/ethersphere/swarm/storage"
 	olog "github.com/opentracing/opentracing-go/log"
@@ -39,6 +40,7 @@ type Store interface {
 
 // Storer is the object used by the push-sync server side protocol
 type Storer struct {
+	kad         *network.Kademlia
 	store       Store                            // store to put chunks in, and retrieve them
 	ps          PubSub                           // pubsub interface to receive chunks and send receipts
 	deregister  func()                           // deregister the registered handler when Storer is closed
@@ -52,8 +54,9 @@ type Storer struct {
 // - the chunks are stored and synced to their nearest neighbours and
 // - a statement of custody receipt is sent as a response to the originator
 // it sets a cancel function that deregisters the handler
-func NewStorer(store Store, ps PubSub, pushReceipt func(addr []byte, origin []byte)) *Storer {
+func NewStorer(store Store, ps PubSub, kad *network.Kademlia, pushReceipt func(addr []byte, origin []byte)) *Storer {
 	s := &Storer{
+		kad:         kad,
 		store:       store,
 		ps:          ps,
 		pushReceipt: pushReceipt,
@@ -100,6 +103,14 @@ func (s *Storer) processChunkMsg(chmsg *chunkMsg) error {
 	if _, err := s.store.Put(context.TODO(), chunk.ModePutSync, ch); err != nil {
 		return err
 	}
+
+	closerPeer := s.kad.CloserPeerThanMe(chmsg.Addr)
+
+	// if there is closer peer, do not send back a receipt
+	if closerPeer {
+		return nil
+	}
+
 	// TODO: check if originator or relayer is a nearest neighbour then return
 	// otherwise send back receipt
 	return s.sendReceiptMsg(chmsg)
