@@ -811,10 +811,10 @@ func (s *SlipStream) handleRetrieveRequest(ctx context.Context, p *Peer, req *Re
 	}
 
 	//KLUDGE
-	c, err := s.providers["SYNC"].Get(ctx, r)
+	data, err := s.providers["SYNC"].Get(ctx, r.Addr)
 	log.Trace("retrieve request, delivery", "ref", req.Addr, "peer", p.ID())
 	syncing := false
-	err = s.deliver(ctx, chunk, 0, syncing)
+	err = s.deliver(ctx, chunk.NewChunk(req.Addr, data), p, syncing)
 	if err != nil {
 		log.Error("sp.Deliver errored", "err", err)
 	}
