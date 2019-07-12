@@ -808,21 +808,22 @@ func (s *SlipStream) deliver(ctx context.Context, chunk storage.Chunk, p *Peer, 
 
 	metrics.GetOrRegisterCounter("peer.deliver", nil).Inc(1)
 
-	//we send different types of messages if delivery is for syncing or retrievals,
+	//TODO: should we send different types of messages if delivery is for syncing or retrievals,
 	//even if handling and content of the message are the same,
-	//because swap accounting decides which messages need accounting based on the message type
+	//because swap accounting decides which messages need accounting based on the message type?
 	if syncing {
-		msg = &ChunkDeliveryMsgSyncing{
+		msg = &ChunkDeliveryMsg{
 			Addr:  chunk.Address(),
 			SData: chunk.Data(),
+			peer:  p,
 		}
 	} else {
-		msg = &ChunkDeliveryMsgRetrieval{
+		msg = &ChunkDeliveryMsg{
 			Addr:  chunk.Address(),
 			SData: chunk.Data(),
+			peer:  p,
 		}
 	}
-
 	return p.Send(ctx, msg)
 }
 
@@ -838,10 +839,10 @@ func (s *SlipStream) handleRetrieveRequest(ctx context.Context, p *Peer, req *Re
 	}
 
 	//KLUDGE
-	c, err := s.providers["SYNC"].Get(ctx, r)
+	data, err := s.providers["SYNC"].Get(ctx, r.Addr)
 	log.Trace("retrieve request, delivery", "ref", req.Addr, "peer", p.ID())
 	syncing := false
-	err = s.deliver(ctx, chunk, 0, syncing)
+	err = s.deliver(ctx, chunk.NewChunk(req.Addr, data), p, syncing)
 	if err != nil {
 		log.Error("sp.Deliver errored", "err", err)
 	}
