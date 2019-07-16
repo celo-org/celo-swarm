@@ -147,7 +147,7 @@ func TestDiscoverySimulationSimAdapter(t *testing.T) {
 	testDiscoverySimulationSimAdapter(t, *nodeCount, *initCount)
 }
 
-func TestDiscoveryPersistenceSimulationSimAdapter(t *testing.T) {
+func XTestDiscoveryPersistenceSimulationSimAdapter(t *testing.T) {
 	testDiscoveryPersistenceSimulationSimAdapter(t, *nodeCount, *initCount)
 }
 
