@@ -107,12 +107,12 @@ func Setup(ctx *cli.Context) {
 
 		if enableExport {
 			log.Info("Enabling swarm metrics export to InfluxDB")
-			go influxdb.InfluxDBWithTags(gethmetrics.DefaultRegistry, 1*time.Second, endpoint, database, username, password, "swarm.", tagsMap)
+			go influxdb.InfluxDBWithTags(gethmetrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "swarm.", tagsMap)
 		}
 
 		if enableAccountingExport {
 			log.Info("Exporting swarm accounting metrics to InfluxDB")
-			go influxdb.InfluxDBWithTags(gethmetrics.AccountingRegistry, 1*time.Second, endpoint, database, username, password, "accounting.", tagsMap)
+			go influxdb.InfluxDBWithTags(gethmetrics.AccountingRegistry, 10*time.Second, endpoint, database, username, password, "accounting.", tagsMap)
 		}
 	}
 }
