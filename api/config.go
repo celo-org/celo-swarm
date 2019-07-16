@@ -72,6 +72,7 @@ type Config struct {
 	MaxStreamPeerServers int
 	LightNodeEnabled     bool
 	BootnodeMode         bool
+	HiveNoDiscovery      bool
 	SyncUpdateDelay      time.Duration
 	SwapAPI              string
 	Cors                 string

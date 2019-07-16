@@ -166,6 +166,10 @@ var (
 		Name:  "bootnode-mode",
 		Usage: "Run Swarm in Bootnode mode",
 	}
+	SwarmHiveNoDiscoveryFlag = cli.BoolFlag{
+		Name:  "no-hive-discovery",
+		Usage: "Disables the peer discovery mechanism in the hive protocol (manual peer addition)",
+	}
 	SwarmFeedNameFlag = cli.StringFlag{
 		Name:  "name",
 		Usage: "User-defined name for the new feed, limited to 32 characters. If combined with topic, it will refer to a subtopic with this name",
