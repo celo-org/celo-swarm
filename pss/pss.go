@@ -727,8 +727,12 @@ func sendMsg(p *Pss, sp *network.Peer, msg *PssMsg) bool {
 
 	// get the protocol peer from the forwarding peer cache
 	p.peersMu.RLock()
-	pp := p.peers[sp.Info().ID]
+	pp, ok := p.peers[sp.Info().ID]
 	p.peersMu.RUnlock()
+	if !ok {
+		log.Warn("peer no longer in our list, dropping message")
+		return false
+	}
 
 	err := pp.Send(context.TODO(), msg)
 	if err != nil {
