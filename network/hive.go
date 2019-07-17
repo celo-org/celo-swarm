@@ -97,7 +97,9 @@ func (h *Hive) Start(server *p2p.Server) error {
 	// ticker to keep the hive alive
 	h.ticker = time.NewTicker(h.KeepAliveInterval)
 	// this loop is doing bootstrapping and maintains a healthy table
-	go h.connect()
+	if h.Discovery {
+		go h.connect()
+	}
 	return nil
 }
 
@@ -130,24 +132,22 @@ func (h *Hive) Stop() error {
 func (h *Hive) connect() {
 	for range h.ticker.C {
 		addr, depth, changed := h.SuggestPeer()
-		if h.Discovery && changed {
+		if changed {
 			NotifyDepth(uint8(depth), h.Kademlia)
 		}
 		if addr == nil {
 			continue
 		}
 
-		if h.Discovery {
-			log.Trace("hive connect() suggested", "base", fmt.Sprintf("%x", h.BaseAddr()[:4]), "peer", fmt.Sprintf("%x", addr.Address()[:4]))
-			under, err := enode.ParseV4(string(addr.Under()))
-			if err != nil {
-				log.Warn("invalid node url", "base", fmt.Sprintf("%x", h.BaseAddr()[:4]), "addr", string(addr.Under()), "err", err)
-				continue
-			}
-
-			log.Trace("attempt to connect to peer", "base", fmt.Sprintf("%x", h.BaseAddr()[:4]), "peer", fmt.Sprintf("%x", addr.Address()[:4]))
-			h.addPeer(under)
+		log.Trace("hive connect() suggested", "base", fmt.Sprintf("%x", h.BaseAddr()[:4]), "peer", fmt.Sprintf("%x", addr.Address()[:4]))
+		under, err := enode.ParseV4(string(addr.Under()))
+		if err != nil {
+			log.Warn("invalid node url", "base", fmt.Sprintf("%x", h.BaseAddr()[:4]), "addr", string(addr.Under()), "err", err)
+			continue
 		}
+
+		log.Trace("attempt to connect to peer", "base", fmt.Sprintf("%x", h.BaseAddr()[:4]), "peer", fmt.Sprintf("%x", addr.Address()[:4]))
+		h.addPeer(under)
 	}
 }
 
