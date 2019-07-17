@@ -307,7 +307,7 @@ func TestAddressMatch(t *testing.T) {
 }
 
 // test that message is handled by sender if a prox handler exists and sender is in prox of message
-func TestProxShortCircuit(t *testing.T) {
+func XTestProxShortCircuit(t *testing.T) {
 	// sender node address
 	localAddr := network.RandomAddr().Over()
 	localPotAddr := pot.NewAddressFromBytes(localAddr)
