@@ -178,7 +178,7 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 	bucket.Store(simulation.BucketKeyKademlia, kad)
 
 	privKey, err := crypto.GenerateKey()
-	pssp := pss.NewPssParams().WithPrivateKey(privKey)
+	pssp := pss.NewParams().WithPrivateKey(privKey)
 	ps, err := pss.NewPss(kad, pssp)
 	if err != nil {
 		return nil, nil, err
@@ -196,11 +196,11 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 	pubSub := pss.NewPubSub(ps)
 
 	// set up syncer
-	p := NewPusher(lstore, pubSub, chunk.NewTags())
+	p := NewPusher(lstore, pubSub, chunk.NewTags(), kad)
 	bucket.Store(bucketKeyPushSyncer, p)
 
 	// setup storer
-	s := NewStorer(netStore, pubSub, p.PushReceipt)
+	s := NewStorer(netStore, pubSub, kad, p.PushReceipt)
 
 	cleanup := func() {
 		p.Close()

@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethersphere/swarm/chunk"
+	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/storage"
 	colorable "github.com/mattn/go-colorable"
 )
@@ -273,7 +274,8 @@ func TestPusher(t *testing.T) {
 	// construct the mock push sync index iterator
 	tp := newTestPushSyncIndex(chunkCnt, tagIDs, tags, sent)
 	// start push syncing in a go routine
-	p := NewPusher(tp, ps, tags)
+	kad := network.NewKademlia(nil, network.NewKadParams())
+	p := NewPusher(tp, ps, tags, kad)
 	defer p.Close()
 	// collect synced chunks until all chunks synced
 	// wait on errc for errors on any thread
@@ -373,17 +375,19 @@ func TestPushSyncAndStoreWithLoopbackPubSub(t *testing.T) {
 	// mock pubsub messenger
 	ps := newLoopBack(true)
 
+	kad := network.NewKademlia(nil, network.NewKadParams())
+
 	tags, tagIDs := setupTags(chunkCnt, tagCnt)
 	// construct the mock push sync index iterator
 	tp := newTestPushSyncIndex(chunkCnt, tagIDs, tags, sent)
 	// start push syncing in a go routine
-	p := NewPusher(tp, ps, tags)
+	p := NewPusher(tp, ps, tags, kad)
 	defer p.Close()
 
 	// set up a number of storers
 	storers := make([]*Storer, storerCnt)
 	for i := 0; i < storerCnt; i++ {
-		storers[i] = NewStorer(&testStore{store}, ps, p.PushReceipt)
+		storers[i] = NewStorer(&testStore{store}, ps, kad, p.PushReceipt)
 	}
 
 	synced := 0

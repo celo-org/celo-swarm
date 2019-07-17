@@ -44,7 +44,7 @@ import (
 
 const (
 	defaultPaddingByteSize     = 16
-	DefaultMsgTTL              = time.Second * 120
+	defaultMsgTTL              = time.Second * 120
 	defaultDigestCacheTTL      = time.Second * 10
 	defaultSymKeyCacheCapacity = 512
 	digestLength               = 32 // byte length of digest used for pss cache (currently same as swarm chunk hash)
@@ -53,8 +53,8 @@ const (
 	defaultMaxMsgSize          = 1024 * 1024
 	defaultCleanInterval       = time.Second * 60 * 10
 	defaultOutboxCapacity      = 100000
-	pssProtocolName            = "pss"
-	pssVersion                 = 2
+	protocolName               = "pss"
+	protocolVersion            = 2
 	hasherCount                = 8
 )
 
@@ -62,10 +62,19 @@ var (
 	addressLength = len(pot.Address{})
 )
 
+var spec = &protocols.Spec{
+	Name:       protocolName,
+	Version:    protocolVersion,
+	MaxMsgSize: defaultMaxMsgSize,
+	Messages: []interface{}{
+		PssMsg{},
+	},
+}
+
 // cache is used for preventing backwards routing
 // will also be instrumental in flood guard mechanism
 // and mailbox implementation
-type pssCacheEntry struct {
+type cacheEntry struct {
 	expiresAt time.Time
 }
 
@@ -79,14 +88,14 @@ type senderPeer interface {
 
 // per-key peer related information
 // member `protected` prevents garbage collection of the instance
-type pssPeer struct {
+type peer struct {
 	lastSeen  time.Time
 	address   PssAddress
 	protected bool
 }
 
 // Pss configuration parameters
-type PssParams struct {
+type Params struct {
 	MsgTTL              time.Duration
 	CacheTTL            time.Duration
 	privateKey          *ecdsa.PrivateKey
@@ -95,15 +104,15 @@ type PssParams struct {
 }
 
 // Sane defaults for Pss
-func NewPssParams() *PssParams {
-	return &PssParams{
-		MsgTTL:              DefaultMsgTTL,
+func NewParams() *Params {
+	return &Params{
+		MsgTTL:              defaultMsgTTL,
 		CacheTTL:            defaultDigestCacheTTL,
 		SymKeyCacheCapacity: defaultSymKeyCacheCapacity,
 	}
 }
 
-func (params *PssParams) WithPrivateKey(privatekey *ecdsa.PrivateKey) *PssParams {
+func (params *Params) WithPrivateKey(privatekey *ecdsa.PrivateKey) *Params {
 	params.privateKey = privatekey
 	return params
 }
@@ -111,11 +120,6 @@ func (params *PssParams) WithPrivateKey(privatekey *ecdsa.PrivateKey) *PssParams
 // Toplevel pss object, takes care of message sending, receiving, decryption and encryption, message handler dispatchers and message forwarding.
 //
 // Implements node.Service
-
-type OutboxMsg struct {
-	msg       *PssMsg
-	startedAt time.Time
-}
 
 type Pss struct {
 	*network.Kademlia // we can get the Kademlia address from this
@@ -125,9 +129,10 @@ type Pss struct {
 	auxAPIs    []rpc.API         // builtins (handshake, test) can add APIs
 
 	// sending and forwarding
-	fwdPool         map[string]*protocols.Peer // keep track of all peers sitting on the pssmsg routing layer
-	fwdPoolMu       sync.RWMutex
-	fwdCache        map[pssDigest]pssCacheEntry // checksum of unique fields from pssmsg mapped to expiry, cache to determine whether to drop msg
+	peers   map[string]*protocols.Peer // keep track of all peers sitting on the pssmsg routing layer
+	peersMu sync.RWMutex
+
+	fwdCache        map[digest]cacheEntry // checksum of unique fields from pssmsg mapped to expiry, cache to determine whether to drop msg
 	fwdCacheMu      sync.RWMutex
 	cacheTTL        time.Duration // how long to keep messages in fwdCache (not implemented)
 	msgTTL          time.Duration
@@ -154,13 +159,13 @@ func (p *Pss) String() string {
 //
 // In addition to params, it takes a swarm network Kademlia
 // and a FileStore storage for message cache storage.
-func NewPss(k *network.Kademlia, params *PssParams) (*Pss, error) {
+func NewPss(k *network.Kademlia, params *Params) (*Pss, error) {
 	if params.privateKey == nil {
 		return nil, errors.New("missing private key for pss")
 	}
-	cap := p2p.Cap{
-		Name:    pssProtocolName,
-		Version: pssVersion,
+	c := p2p.Cap{
+		Name:    protocolName,
+		Version: protocolVersion,
 	}
 	ps := &Pss{
 		Kademlia: k,
@@ -169,12 +174,12 @@ func NewPss(k *network.Kademlia, params *PssParams) (*Pss, error) {
 		privateKey: params.privateKey,
 		quitC:      make(chan struct{}),
 
-		fwdPool:         make(map[string]*protocols.Peer),
-		fwdCache:        make(map[pssDigest]pssCacheEntry),
+		peers:           make(map[string]*protocols.Peer),
+		fwdCache:        make(map[digest]cacheEntry),
 		cacheTTL:        params.CacheTTL,
 		msgTTL:          params.MsgTTL,
 		paddingByteSize: defaultPaddingByteSize,
-		capstring:       cap.String(),
+		capstring:       c.String(),
 		outbox:          make(chan *OutboxMsg, defaultOutboxCapacity),
 
 		handlers:         make(map[Topic]map[*handler]bool),
@@ -247,32 +252,39 @@ func (p *Pss) Stop() error {
 	return nil
 }
 
-var pssSpec = &protocols.Spec{
-	Name:       pssProtocolName,
-	Version:    pssVersion,
-	MaxMsgSize: defaultMaxMsgSize,
-	Messages: []interface{}{
-		PssMsg{},
-	},
-}
-
 func (p *Pss) Protocols() []p2p.Protocol {
 	return []p2p.Protocol{
 		{
-			Name:    pssSpec.Name,
-			Version: pssSpec.Version,
-			Length:  pssSpec.Length(),
+			Name:    spec.Name,
+			Version: spec.Version,
+			Length:  spec.Length(),
 			Run:     p.Run,
 		},
 	}
 }
 
 func (p *Pss) Run(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
-	pp := protocols.NewPeer(peer, rw, pssSpec)
-	p.fwdPoolMu.Lock()
-	p.fwdPool[peer.Info().ID] = pp
-	p.fwdPoolMu.Unlock()
+	pp := protocols.NewPeer(peer, rw, spec)
+	p.addPeer(pp)
+	defer p.removePeer(pp)
 	return pp.Run(p.handlePssMsg)
+}
+
+func (p *Pss) addPeer(peer *protocols.Peer) {
+	p.peersMu.Lock()
+	defer p.peersMu.Unlock()
+	p.peers[peer.Peer.Info().ID] = peer
+}
+
+func (p *Pss) removePeer(peer *protocols.Peer) {
+	p.peersMu.Lock()
+	defer p.peersMu.Unlock()
+	if _, found := p.peers[peer.Peer.Info().ID]; found {
+		log.Trace("removing peer", "id", peer.Peer.Info().ID)
+		delete(p.peers, peer.Peer.Info().ID)
+	} else {
+		log.Warn("peer was marked for removal but not found", "peer", peer.Peer.Info().ID)
+	}
 }
 
 func (p *Pss) APIs() []rpc.API {
@@ -389,7 +401,7 @@ func (p *Pss) handlePssMsg(ctx context.Context, msg interface{}) error {
 	metrics.GetOrRegisterCounter("pss.handlepssmsg", nil).Inc(1)
 	pssmsg, ok := msg.(*PssMsg)
 	if !ok {
-		return fmt.Errorf("invalid message type. Expected *PssMsg, got %T ", msg)
+		return fmt.Errorf("invalid message type. Expected *PssMsg, got %T", msg)
 	}
 	log.Trace("handler", "self", label(p.Kademlia.BaseAddr()), "topic", label(pssmsg.Payload.Topic[:]))
 	if int64(pssmsg.Expire) < time.Now().Unix() {
@@ -545,10 +557,7 @@ func (p *Pss) isSelfPossibleRecipient(msg *PssMsg, prox bool) bool {
 func (p *Pss) enqueue(msg *PssMsg) error {
 	defer metrics.GetOrRegisterResettingTimer("pss.enqueue", nil).UpdateSince(time.Now())
 
-	outboxmsg := &OutboxMsg{
-		msg:       msg,
-		startedAt: time.Now(),
-	}
+	outboxmsg := newOutboxMsg(msg)
 	select {
 	case p.outbox <- outboxmsg:
 		metrics.GetOrRegisterGauge("pss.outbox.len", nil).Update(int64(len(p.outbox)))
@@ -589,11 +598,12 @@ func (p *Pss) SendRaw(address PssAddress, topic Topic, msg []byte) error {
 
 	// if we have a proxhandler on this topic
 	// also deliver message to ourselves
-	if capabilities, ok := p.getTopicHandlerCaps(topic); ok {
-		if p.isSelfPossibleRecipient(pssMsg, true) && capabilities.prox {
-			return p.process(pssMsg, true, true)
-		}
-	}
+	//TODO: anteva: sure we can disable this?
+	//if capabilities, ok := p.getTopicHandlerCaps(topic); ok {
+	//if p.isSelfPossibleRecipient(pssMsg, true) && capabilities.prox {
+	//return p.process(pssMsg, true, true)
+	//}
+	//}
 	return nil
 }
 
@@ -687,11 +697,12 @@ func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []by
 	if err != nil {
 		return err
 	}
-	if capabilities, ok := p.getTopicHandlerCaps(topic); ok {
-		if p.isSelfPossibleRecipient(pssMsg, true) && capabilities.prox {
-			return p.process(pssMsg, true, true)
-		}
-	}
+	//TODO: anteva: sure we can disable this?
+	//if capabilities, ok := p.getTopicHandlerCaps(topic); ok {
+	//if p.isSelfPossibleRecipient(pssMsg, true) && capabilities.prox {
+	//return p.process(pssMsg, true, true)
+	//}
+	//}
 	return nil
 }
 
@@ -715,9 +726,9 @@ func sendMsg(p *Pss, sp *network.Peer, msg *PssMsg) bool {
 	}
 
 	// get the protocol peer from the forwarding peer cache
-	p.fwdPoolMu.RLock()
-	pp := p.fwdPool[sp.Info().ID]
-	p.fwdPoolMu.RUnlock()
+	p.peersMu.RLock()
+	pp := p.peers[sp.Info().ID]
+	p.peersMu.RUnlock()
 
 	err := pp.Send(context.TODO(), msg)
 	if err != nil {
@@ -824,15 +835,15 @@ func label(b []byte) string {
 func (p *Pss) addFwdCache(msg *PssMsg) error {
 	defer metrics.GetOrRegisterResettingTimer("pss.addfwdcache", nil).UpdateSince(time.Now())
 
-	var entry pssCacheEntry
+	var entry cacheEntry
 	var ok bool
 
 	p.fwdCacheMu.Lock()
 	defer p.fwdCacheMu.Unlock()
 
-	digest := p.digest(msg)
+	digest := p.msgDigest(msg)
 	if entry, ok = p.fwdCache[digest]; !ok {
-		entry = pssCacheEntry{}
+		entry = cacheEntry{}
 	}
 	entry.expiresAt = time.Now().Add(p.cacheTTL)
 	p.fwdCache[digest] = entry
@@ -844,7 +855,7 @@ func (p *Pss) checkFwdCache(msg *PssMsg) bool {
 	p.fwdCacheMu.Lock()
 	defer p.fwdCacheMu.Unlock()
 
-	digest := p.digest(msg)
+	digest := p.msgDigest(msg)
 	entry, ok := p.fwdCache[digest]
 	if ok {
 		if entry.expiresAt.After(time.Now()) {
@@ -858,19 +869,19 @@ func (p *Pss) checkFwdCache(msg *PssMsg) bool {
 }
 
 // Digest of message
-func (p *Pss) digest(msg *PssMsg) pssDigest {
+func (p *Pss) msgDigest(msg *PssMsg) digest {
 	return p.digestBytes(msg.serialize())
 }
 
-func (p *Pss) digestBytes(msg []byte) pssDigest {
+func (p *Pss) digestBytes(msg []byte) digest {
 	hasher := p.hashPool.Get().(hash.Hash)
 	defer p.hashPool.Put(hasher)
 	hasher.Reset()
 	hasher.Write(msg)
-	digest := pssDigest{}
+	d := digest{}
 	key := hasher.Sum(nil)
-	copy(digest[:], key[:digestLength])
-	return digest
+	copy(d[:], key[:digestLength])
+	return d
 }
 
 func validateAddress(addr PssAddress) error {
