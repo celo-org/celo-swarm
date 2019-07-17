@@ -106,6 +106,7 @@ func (s *Storer) processChunkMsg(chmsg *chunkMsg) error {
 
 	closerPeer := s.kad.CloserPeerThanMe(chmsg.Addr)
 
+	log.Trace("closer than me", "ref", fmt.Sprintf("%x", chmsg.Addr), "res", closerPeer)
 	// if there is closer peer, do not send back a receipt
 	if closerPeer {
 		return nil
