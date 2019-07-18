@@ -35,7 +35,7 @@ import (
 const streamName = "SYNC"
 
 // should be changed in tests only
-var syncBinsWithinDepth = true
+var syncBinsWithinDepth = false
 
 type syncProvider struct {
 	netStore *storage.NetStore
