@@ -147,14 +147,6 @@ func TestDiscoverySimulationSimAdapter(t *testing.T) {
 	testDiscoverySimulationSimAdapter(t, *nodeCount, *initCount)
 }
 
-func XTestDiscoveryPersistenceSimulationSimAdapter(t *testing.T) {
-	testDiscoveryPersistenceSimulationSimAdapter(t, *nodeCount, *initCount)
-}
-
-func testDiscoveryPersistenceSimulationSimAdapter(t *testing.T, nodes, conns int) {
-	testDiscoveryPersistenceSimulation(t, nodes, conns, adapters.NewSimAdapter(services))
-}
-
 func testDiscoverySimulationSimAdapter(t *testing.T, nodes, conns int) {
 	testDiscoverySimulation(t, nodes, conns, adapters.NewSimAdapter(services))
 }
@@ -184,26 +176,6 @@ func testDiscoverySimulation(t *testing.T, nodes, conns int, adapter adapters.No
 	t.Logf("Min: %s, Max: %s, Average: %s", min, max, time.Duration(sum/len(result.Passes))*time.Nanosecond)
 	finishedAt := time.Now()
 	t.Logf("Setup: %s, shutdown: %s", result.StartedAt.Sub(startedAt), finishedAt.Sub(result.FinishedAt))
-}
-
-func testDiscoveryPersistenceSimulation(t *testing.T, nodes, conns int, adapter adapters.NodeAdapter) map[int][]byte {
-	persistenceEnabled = true
-	discoveryEnabled = true
-
-	result, err := discoveryPersistenceSimulation(nodes, conns, adapter)
-
-	if err != nil {
-		t.Fatalf("Setting up simulation failed: %v", err)
-	}
-	if result.Error != nil {
-		t.Fatalf("Simulation failed: %s", result.Error)
-	}
-	t.Logf("Simulation with %d nodes passed in %s", nodes, result.FinishedAt.Sub(result.StartedAt))
-	// set the discovery and persistence flags again to default so other
-	// tests will not be affected
-	discoveryEnabled = true
-	persistenceEnabled = false
-	return nil
 }
 
 func benchmarkDiscovery(b *testing.B, nodes, conns int) {
@@ -299,163 +271,6 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 	if result.Error != nil {
 		return result, nil
 	}
-	return result, nil
-}
-
-func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simulations.StepResult, error) {
-	cleanDbStores()
-	defer cleanDbStores()
-
-	// create network
-	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
-		ID:             "0",
-		DefaultService: serviceName,
-	})
-	defer net.Shutdown()
-	trigger := make(chan enode.ID)
-	ids := make([]enode.ID, nodes)
-	var addrs [][]byte
-
-	for i := 0; i < nodes; i++ {
-		conf := adapters.RandomNodeConfig()
-		node, err := net.NewNodeWithConfig(conf)
-		if err != nil {
-			panic(err)
-		}
-		if err != nil {
-			return nil, fmt.Errorf("error starting node: %s", err)
-		}
-		if err := net.Start(node.ID()); err != nil {
-			return nil, fmt.Errorf("error starting node %s: %s", node.ID().TerminalString(), err)
-		}
-		if err := triggerChecks(trigger, net, node.ID()); err != nil {
-			return nil, fmt.Errorf("error triggering checks for node %s: %s", node.ID().TerminalString(), err)
-		}
-		// TODO we shouldn't be equating underaddr and overaddr like this, as they are not the same in production
-		ids[i] = node.ID()
-		a := ids[i].Bytes()
-
-		addrs = append(addrs, a)
-	}
-
-	// run a simulation which connects the 10 nodes in a ring and waits
-	// for full peer discovery
-
-	var restartTime time.Time
-
-	action := func(ctx context.Context) error {
-		ticker := time.NewTicker(500 * time.Millisecond)
-
-		for range ticker.C {
-			isHealthy := true
-			for _, id := range ids {
-				//call Healthy RPC
-				node := net.GetNode(id)
-				if node == nil {
-					return fmt.Errorf("unknown node: %s", id)
-				}
-				client, err := node.Client()
-				if err != nil {
-					return fmt.Errorf("error getting node client: %s", err)
-				}
-				healthy := &network.Health{}
-				addr := id.String()
-				ppmap := network.NewPeerPotMap(network.NewKadParams().NeighbourhoodSize, addrs)
-				if err := client.Call(&healthy, "hive_getHealthInfo", ppmap[common.Bytes2Hex(id.Bytes())]); err != nil {
-					return fmt.Errorf("error getting node health: %s", err)
-				}
-
-				log.Info(fmt.Sprintf("NODE: %s, IS HEALTHY: %t", addr, healthy.ConnectNN && healthy.KnowNN && healthy.CountKnowNN > 0))
-				var nodeStr string
-				if err := client.Call(&nodeStr, "hive_string"); err != nil {
-					return fmt.Errorf("error getting node string %s", err)
-				}
-				log.Info(nodeStr)
-				if !healthy.ConnectNN || healthy.CountKnowNN == 0 {
-					isHealthy = false
-					break
-				}
-			}
-			if isHealthy {
-				break
-			}
-		}
-		ticker.Stop()
-
-		log.Info("reached healthy kademlia. starting to shutdown nodes.")
-		shutdownStarted := time.Now()
-		// stop all ids, then start them again
-		for _, id := range ids {
-			node := net.GetNode(id)
-
-			if err := net.Stop(node.ID()); err != nil {
-				return fmt.Errorf("error stopping node %s: %s", node.ID().TerminalString(), err)
-			}
-		}
-		log.Info(fmt.Sprintf("shutting down nodes took: %s", time.Since(shutdownStarted)))
-		persistenceEnabled = true
-		discoveryEnabled = false
-		restartTime = time.Now()
-		for _, id := range ids {
-			node := net.GetNode(id)
-			if err := net.Start(node.ID()); err != nil {
-				return fmt.Errorf("error starting node %s: %s", node.ID().TerminalString(), err)
-			}
-			if err := triggerChecks(trigger, net, node.ID()); err != nil {
-				return fmt.Errorf("error triggering checks for node %s: %s", node.ID().TerminalString(), err)
-			}
-		}
-
-		log.Info(fmt.Sprintf("restarting nodes took: %s", time.Since(restartTime)))
-
-		return nil
-	}
-	net.ConnectNodesChain(nil)
-	log.Debug(fmt.Sprintf("nodes: %v", len(addrs)))
-	// construct the peer pot, so that kademlia health can be checked
-	check := func(ctx context.Context, id enode.ID) (bool, error) {
-		select {
-		case <-ctx.Done():
-			return false, ctx.Err()
-		default:
-		}
-
-		node := net.GetNode(id)
-		if node == nil {
-			return false, fmt.Errorf("unknown node: %s", id)
-		}
-		client, err := node.Client()
-		if err != nil {
-			return false, fmt.Errorf("error getting node client: %s", err)
-		}
-		healthy := &network.Health{}
-		ppmap := network.NewPeerPotMap(network.NewKadParams().NeighbourhoodSize, addrs)
-
-		if err := client.Call(&healthy, "hive_getHealthInfo", ppmap[common.Bytes2Hex(id.Bytes())]); err != nil {
-			return false, fmt.Errorf("error getting node health: %s", err)
-		}
-		log.Info(fmt.Sprintf("node %4s healthy: got nearest neighbours: %v, know nearest neighbours: %v", id, healthy.ConnectNN, healthy.KnowNN))
-
-		return healthy.KnowNN && healthy.ConnectNN, nil
-	}
-
-	// 64 nodes ~ 1min
-	// 128 nodes ~
-	timeout := 300 * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	result := simulations.NewSimulation(net).Run(ctx, &simulations.Step{
-		Action:  action,
-		Trigger: trigger,
-		Expect: &simulations.Expectation{
-			Nodes: ids,
-			Check: check,
-		},
-	})
-	if result.Error != nil {
-		return result, nil
-	}
-
 	return result, nil
 }
 
