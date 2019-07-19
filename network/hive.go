@@ -218,28 +218,28 @@ func (h *Hive) Peer(id enode.ID) *BzzPeer {
 	return h.peers[id]
 }
 
-// loadPeers, savePeer implement persistence callback/
+// loadPeers loads known peers from the state store and registers them in hive
 func (h *Hive) loadPeers() error {
 	var as []*BzzAddr
 	err := h.Store.Get("peers", &as)
 	if err != nil {
 		if err == state.ErrNotFound {
-			log.Info(fmt.Sprintf("hive %08x: no persisted peers found", h.BaseAddr()[:4]))
+			log.Info("hive no persisted peers found", "base", h.BaseAddr()[:4])
 			return nil
 		}
 		return err
 	}
-	log.Info(fmt.Sprintf("hive %08x: peers loaded", h.BaseAddr()[:4]))
+	log.Info("hive peers loaded", "base", h.BaseAddr()[:4])
 
 	return h.Register(as...)
 }
 
-// savePeers, savePeer implement persistence callback/
+// savePeers iterates over all known addresses and stores the known peers in the state store
 func (h *Hive) savePeers() error {
 	var peers []*BzzAddr
 	h.Kademlia.EachAddr(nil, 256, func(pa *BzzAddr, i int) bool {
 		if pa == nil {
-			log.Warn(fmt.Sprintf("empty addr: %v", i))
+			log.Warn("empty addr in kademlia table", "addr", i)
 			return true
 		}
 		log.Trace("saving peer", "peer", pa)
