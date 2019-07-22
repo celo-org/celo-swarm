@@ -266,8 +266,8 @@ func flagsOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Confi
 		currentConfig.BootnodeMode = ctx.GlobalBool(SwarmBootnodeModeFlag.Name)
 	}
 
-	if ctx.GlobalIsSet(SwarmHiveNoDiscoveryFlag.Name) {
-		currentConfig.HiveNoDiscovery = ctx.GlobalBool(SwarmHiveNoDiscoveryFlag.Name)
+	if ctx.GlobalIsSet(SwarmDisableAutoConnectFlag.Name) {
+		currentConfig.HiveDisableAutoConnect = ctx.GlobalBool(SwarmDisableAutoConnectFlag.Name)
 	}
 
 	if ctx.GlobalIsSet(SwarmGlobalStoreAPIFlag.Name) {

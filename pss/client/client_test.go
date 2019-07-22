@@ -275,7 +275,7 @@ func newServices() adapters.Services {
 		"bzz": func(ctx *adapters.ServiceContext) (node.Service, error) {
 			addr := network.NewAddr(ctx.Config.Node())
 			hp := network.NewHiveParams()
-			hp.Discovery = false
+			hp.AutoConnect = false
 			config := &network.BzzConfig{
 				OverlayAddr:  addr.Over(),
 				UnderlayAddr: addr.Under(),

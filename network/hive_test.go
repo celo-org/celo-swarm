@@ -124,7 +124,7 @@ func TestHiveStatePersistance(t *testing.T) {
 		}
 
 		params := NewHiveParams()
-		params.Discovery = false
+		params.AutoConnect = false
 
 		prvkey, err := crypto.GenerateKey()
 		if err != nil {

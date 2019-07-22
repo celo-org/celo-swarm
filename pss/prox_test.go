@@ -401,7 +401,7 @@ func newProxServices(td *testData, allowRaw bool, handlerContextFuncs map[Topic]
 			addr.OAddr = network.PrivateKeyToBzzKey(bzzPrivateKey)
 			b.Store(simulation.BucketKeyBzzPrivateKey, bzzPrivateKey)
 			hp := network.NewHiveParams()
-			hp.Discovery = false
+			hp.AutoConnect = false
 			config := &network.BzzConfig{
 				OverlayAddr:  addr.Over(),
 				UnderlayAddr: addr.Under(),

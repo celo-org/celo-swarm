@@ -328,9 +328,9 @@ func newService(ctx *adapters.ServiceContext) (node.Service, error) {
 	kad := network.NewKademlia(addr.Over(), kp)
 	hp := network.NewHiveParams()
 	hp.KeepAliveInterval = time.Duration(200) * time.Millisecond
-	hp.Discovery = discoveryEnabled
+	hp.AutoConnect = discoveryEnabled
 
-	log.Info(fmt.Sprintf("discovery for nodeID %s is %t", ctx.Config.ID.String(), hp.Discovery))
+	log.Info(fmt.Sprintf("discovery for nodeID %s is %t", ctx.Config.ID.String(), hp.AutoConnect))
 
 	config := &network.BzzConfig{
 		OverlayAddr:  addr.Over(),

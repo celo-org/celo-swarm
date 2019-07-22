@@ -53,32 +53,32 @@ type Config struct {
 	BaseKey       []byte
 
 	*network.HiveParams
-	Swap                 *swap.LocalProfile
-	Pss                  *pss.PssParams
-	Contract             common.Address
-	EnsRoot              common.Address
-	EnsAPIs              []string
-	Path                 string
-	ListenAddr           string
-	Port                 string
-	PublicKey            string
-	BzzKey               string
-	Enode                *enode.Node `toml:"-"`
-	NetworkID            uint64
-	SwapEnabled          bool
-	SyncEnabled          bool
-	SyncingSkipCheck     bool
-	DeliverySkipCheck    bool
-	MaxStreamPeerServers int
-	LightNodeEnabled     bool
-	BootnodeMode         bool
-	HiveNoDiscovery      bool
-	SyncUpdateDelay      time.Duration
-	SwapAPI              string
-	Cors                 string
-	BzzAccount           string
-	GlobalStoreAPI       string
-	privateKey           *ecdsa.PrivateKey
+	Swap                   *swap.LocalProfile
+	Pss                    *pss.PssParams
+	Contract               common.Address
+	EnsRoot                common.Address
+	EnsAPIs                []string
+	Path                   string
+	ListenAddr             string
+	Port                   string
+	PublicKey              string
+	BzzKey                 string
+	Enode                  *enode.Node `toml:"-"`
+	NetworkID              uint64
+	SwapEnabled            bool
+	SyncEnabled            bool
+	SyncingSkipCheck       bool
+	DeliverySkipCheck      bool
+	MaxStreamPeerServers   int
+	LightNodeEnabled       bool
+	BootnodeMode           bool
+	HiveDisableAutoConnect bool
+	SyncUpdateDelay        time.Duration
+	SwapAPI                string
+	Cors                   string
+	BzzAccount             string
+	GlobalStoreAPI         string
+	privateKey             *ecdsa.PrivateKey
 }
 
 //create a default config with all parameters to set to defaults

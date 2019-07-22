@@ -166,9 +166,9 @@ var (
 		Name:  "bootnode-mode",
 		Usage: "Run Swarm in Bootnode mode",
 	}
-	SwarmHiveNoDiscoveryFlag = cli.BoolFlag{
-		Name:  "no-hive-discovery",
-		Usage: "Disables the peer discovery mechanism in the hive protocol (manual peer addition)",
+	SwarmDisableAutoConnectFlag = cli.BoolFlag{
+		Name:  "disable-auto-connect",
+		Usage: "Disables the peer discovery and auto connect mechanism in the hive protocol",
 	}
 	SwarmFeedNameFlag = cli.StringFlag{
 		Name:  "name",

@@ -77,8 +77,8 @@ func TestNewSwarm(t *testing.T) {
 				if s.privateKey == nil {
 					t.Error("private key is not set")
 				}
-				if !s.config.HiveParams.Discovery {
-					t.Error("config.HiveParams.Discovery is false, must be true regardless the configuration")
+				if !s.config.HiveParams.AutoConnect {
+					t.Error("config.HiveParams.AutoConnect is false, must be true regardless the configuration")
 				}
 				if s.dns != nil {
 					t.Error("dns initialized, but it should not be")

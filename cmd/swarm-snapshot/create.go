@@ -64,7 +64,7 @@ func createSnapshot(filename string, nodes int, services []string) (err error) {
 			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 			hp := network.NewHiveParams()
 			hp.KeepAliveInterval = time.Duration(200) * time.Millisecond
-			hp.Discovery = true // discovery must be enabled when creating a snapshot
+			hp.AutoConnect = true // discovery and auto connect must be enabled when creating a snapshot
 
 			// store the kademlia in the bucket, needed later in the WaitTillHealthy function
 			bucket.Store(simulation.BucketKeyKademlia, kad)

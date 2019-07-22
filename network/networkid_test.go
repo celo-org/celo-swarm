@@ -200,7 +200,7 @@ func newServices() adapters.Services {
 		"bzz": func(ctx *adapters.ServiceContext) (node.Service, error) {
 			addr := NewAddr(ctx.Config.Node())
 			hp := NewHiveParams()
-			hp.Discovery = false
+			hp.AutoConnect = false
 			cnt++
 			//assign the network ID
 			currentNetworkID = cnt % NumberOfNets

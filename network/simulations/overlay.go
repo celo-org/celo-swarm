@@ -94,7 +94,7 @@ func (s *Simulation) NewService(ctx *adapters.ServiceContext) (node.Service, err
 	kp.RetryInterval = 1000000
 	kad := network.NewKademlia(addr.Over(), kp)
 	hp := network.NewHiveParams()
-	hp.Discovery = !*noDiscovery
+	hp.AutoConnect = !*noDiscovery
 	hp.KeepAliveInterval = 300 * time.Millisecond
 
 	config := &network.BzzConfig{

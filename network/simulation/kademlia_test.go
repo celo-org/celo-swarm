@@ -130,7 +130,7 @@ func createSimServiceMap(discovery bool) map[string]ServiceFunc {
 		"bzz": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 			addr := network.NewAddr(ctx.Config.Node())
 			hp := network.NewHiveParams()
-			hp.Discovery = discovery
+			hp.AutoConnect = discovery
 			config := &network.BzzConfig{
 				OverlayAddr:  addr.Over(),
 				UnderlayAddr: addr.Under(),

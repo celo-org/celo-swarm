@@ -118,9 +118,9 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	}
 	log.Debug("Setting up Swarm service components")
 
-	config.HiveParams.Discovery = true
-	if config.HiveNoDiscovery {
-		config.HiveParams.Discovery = false
+	config.HiveParams.AutoConnect = true
+	if config.HiveDisableAutoConnect {
+		config.HiveParams.AutoConnect = false
 	}
 
 	bzzconfig := &network.BzzConfig{

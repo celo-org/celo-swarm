@@ -38,7 +38,7 @@ to suggest peers to bootstrap connectivity
 
 // HiveParams holds the config options to hive
 type HiveParams struct {
-	Discovery             bool  // if want discovery of not
+	AutoConnect           bool  // if discovery and auto connect funcationality is enabled
 	PeersBroadcastSetSize uint8 // how many peers to use when relaying
 	MaxPeersPerRequest    uint8 // max size for peer address batches
 	KeepAliveInterval     time.Duration
@@ -47,7 +47,7 @@ type HiveParams struct {
 // NewHiveParams returns hive config with only the
 func NewHiveParams() *HiveParams {
 	return &HiveParams{
-		Discovery:             true,
+		AutoConnect:           true,
 		PeersBroadcastSetSize: 3,
 		MaxPeersPerRequest:    5,
 		KeepAliveInterval:     500 * time.Millisecond,
@@ -83,7 +83,7 @@ func NewHive(params *HiveParams, kad *Kademlia, store state.Store) *Hive {
 // server is used to connect to a peer based on its NodeID or enode URL
 // these are called on the p2p.Server which runs on the node
 func (h *Hive) Start(server *p2p.Server) error {
-	log.Info("Starting hive", "baseaddr", fmt.Sprintf("%x", h.BaseAddr()[:4]), "discovery", h.Discovery)
+	log.Info("Starting hive", "baseaddr", fmt.Sprintf("%x", h.BaseAddr()[:4]), "auto-connect", h.AutoConnect)
 	// if state store is specified, load peers to prepopulate the overlay address book
 	if h.Store != nil {
 		log.Info("Detected an existing store. trying to load peers")
@@ -97,7 +97,7 @@ func (h *Hive) Start(server *p2p.Server) error {
 	// ticker to keep the hive alive
 	h.ticker = time.NewTicker(h.KeepAliveInterval)
 	// this loop is doing bootstrapping and maintains a healthy table
-	if h.Discovery {
+	if h.AutoConnect {
 		go h.connect()
 	}
 	return nil
@@ -159,7 +159,7 @@ func (h *Hive) Run(p *BzzPeer) error {
 	dp := NewPeer(p, h.Kademlia)
 	depth, changed := h.On(dp)
 	// if we want discovery, advertise change of depth
-	if h.Discovery {
+	if h.AutoConnect {
 		if changed {
 			// if depth changed, send to all peers
 			NotifyDepth(depth, h.Kademlia)
